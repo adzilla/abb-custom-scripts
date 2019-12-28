@@ -1,0 +1,320 @@
+MODULE MEASURE_DECAL(SYSMODULE)
+
+    !*************************************************!
+    !              
+    !                                                 !
+    !  MODULE SYSTEME   :  MEASURE_DECAL              !
+    !*************************************************!
+    !   
+    !****************************************************************************************************************************!
+    !                                             DOCUMENTATION                                                                  !
+    !                                             -------------                                                                  !
+    !	 Signal: le module utilise le signal analogique: Capteur_Measure celui ci doit etre declare dans le EIO.SYS               !
+    !                                                                                                                            !
+    !  La routine "Measure" comprend differentes variables:                                                                      !
+    !  Axe         : Permet d'indiquer dans quelle axe on souhaite decale le repere                                              !                                                                                                                      !
+    !  Ref1        : Value Ref 1, écrite lors de l'apprentissage de la piece reference                                              !
+    !  Ref2        : Value Ref 2, écrite lors de l'apprentissage de la piece reference                                              !
+    !  Value1      : Value 1 mesuré par le laser, lors de la campagne                                                             !
+    !  Value2      : Value 2 mesuré par le laser, lors de la campagne                                                             !
+    !  Max_Error   : Delta maximum entre la Value de refefence et celle Measure                                                  !
+    !                                                                                                                            !
+    ! La routine "Shift_Wobj" permet d'écrire le decalage calcule par la routine Measure dans le Oframe du repere                !
+    !                                                                                                                            !
+    ! La routine "Reset_Shift" permet la remise a zero des Values de decalage                                                    !                                                                                                                   !
+    !                                                                                                                            !
+    ! La routine "Control_Max_Error" permet d'abandonner le cycle en cas de dépasseement de la Value Measure (Max_Error)         !
+    !                                                                                                                            !
+    !                                                                                                                            !
+    !****************************************************************************************************************************!
+    !
+    !Configuration - Utilisateur 
+    !Mode reference : Utilise en manuel pour apprendre la position de reference (0=Measure, 1=Measure reference)
+    PERS bool Reference_Measurement:=TRUE;
+    !Ecriture fichier Log : (1= Ecriture dans le fichier pour debug)
+    CONST bool Write_Measure_Log_File:=TRUE;
+    !
+    !Fin de configuration utilisateur
+
+    !Values Measure table A
+    PERS num FA_mes_1_A:=571.313;
+    PERS num FA_mes_2_A:=561.425;
+    PERS num FB_mes_1_A:=548.729;
+    PERS num FB_mes_2_A:=585.595;
+    PERS num Mes_Z1_A:=420.521;
+    PERS num Mes_Z2_A:=450.551;
+    
+    !Values Measure table B
+    PERS num FA_mes_1_B:=571.313;
+    PERS num FA_mes_2_B:=561.425;
+    PERS num FB_mes_1_B:=548.729;
+    PERS num FB_mes_2_B:=585.595;
+    PERS num Mes_Z1_B:=420.521;
+    PERS num Mes_Z2_B:=450.551;
+
+
+    !---------------------------------------------------------------------------------------
+    PERS bool Measurement_Mistake_A:=TRUE;
+    PERS bool Measurement_Mistake_B:=FALSE;
+    PERS bool Measurement_Mistake_C:=FALSE;
+    PERS bool Measurement_Mistake_D:=FALSE;
+    PERS bool Measurement_Mistake_Z:=FALSE;
+    VAR num Resultat:=0;
+    !---------------------------------------------------------------------------------------
+    !Offset a appliquer au repere
+    PERS pose XYZ_SHIFT:=[[0,0,0],[1,0,0,0]];
+    PERS num A;
+    PERS num A1;
+    PERS num A2;
+    PERS num B;
+    PERS num B1;
+    PERS num B2;
+    PERS num C; 
+    PERS num C1;
+    PERS num C2;
+    PERS num D;
+    PERS num D1;
+    PERS num D2;
+    PERS num Z;
+    PERS num Z1;
+    PERS num Z2;
+    !
+    !Write Log file
+    VAR iodev Measure_Log_File;
+
+    !**************************************************************************************************
+    PROC Measure(string FACE,num Ref1,num Ref2,num Value1,num Value2,num Max_error)
+
+        TEST FACE
+
+        CASE "A":
+            Measurement_Mistake_A:=FALSE;
+            !Calcul de l'offset 
+            Resultat:=((Value1-Ref1)+(Value2-Ref2))/2;
+
+            !Mesure suivant axe X = correction suivant axe Y
+            IF (Abs(Resultat)>Max_error) THEN
+                Measurement_Mistake_A:=TRUE;
+                Set Def_out_of_tolerance;
+                TPWrite "Measure out of tolerance Face "+FACE+" "+ValToStr(Resultat);
+            ELSE
+                A:=Resultat;
+                A1:=Value1;
+                A2:=Value2;
+            ENDIF
+
+
+        CASE "B":
+            Measurement_Mistake_B:=FALSE;
+            !Calcul de l'offset 
+            Resultat:=((Value1-Ref1)+(Value2-Ref2))/2;
+
+            !Mesure suivant axe Y = correction suivant axe X
+            IF (Abs(Resultat)>Max_error) THEN
+                Measurement_Mistake_B:=TRUE;
+                Set Def_out_of_tolerance;
+                TPWrite "Measure out of tolerance Face "+FACE+" "+ValToStr(Resultat);
+            ELSE
+                B:=Resultat;
+                B1:=Value1;
+                B2:=Value2;
+
+            ENDIF
+
+        CASE "C":
+            Measurement_Mistake_C:=FALSE;
+            !Calcul de l'offset 
+            Resultat:=((Value1-Ref1)+(Value2-Ref2))/2;
+
+            IF (Abs(Resultat)>Max_error) THEN
+                Measurement_Mistake_C:=TRUE;
+                Set Def_out_of_tolerance;
+                TPWrite "Measure out of tolerance Face "+FACE+" "+ValToStr(Resultat);
+            ELSE
+                C:=Resultat;
+                C1:=Value1;
+                C2:=Value2;
+            ENDIF
+
+        CASE "D":
+            Measurement_Mistake_D:=FALSE;
+            !Calcul de l'offset 
+            Resultat:=((Value1-Ref1)+(Value2-Ref2))/2;
+
+            IF (Abs(Resultat)>Max_error) THEN
+                Measurement_Mistake_D:=TRUE;
+                Set Def_out_of_tolerance;
+                TPWrite "Measure out of tolerance Face "+FACE+" "+ValToStr(Resultat);
+            ELSE
+                D:=Resultat;
+                D1:=Value1;
+                D2:=Value2;
+            ENDIF
+
+        CASE "Z":
+            Measurement_Mistake_Z:=FALSE;
+            !Calcul de l'offset 
+            Resultat:=((Value1-Ref1)+(Value2-Ref2))/2;
+
+            IF (Abs(Resultat)>Max_error) THEN
+                Measurement_Mistake_Z:=TRUE;
+                Set Def_out_of_tolerance;
+                TPWrite "Measure out of tolerance Face "+FACE+" "+ValToStr(Resultat);
+            ELSE
+                Z:=Resultat;
+                Z1:=Value1;
+                Z2:=Value2;
+            ENDIF
+
+
+        ENDTEST
+
+    ENDPROC
+
+    !--------------------------------------------------------------------------------------------
+    PROC Shift_Wobj()
+
+        IF Satellite_Pos()="0" THEN
+            XYZ_SHIFT.trans.X:=B;
+            XYZ_SHIFT.trans.Y:=A;
+        ENDIF
+
+      IF Satellite_Pos()="90" THEN
+            XYZ_SHIFT.trans.x:=B;
+            XYZ_SHIFT.trans.y:=A;
+        ENDIF  
+        
+        !IF Satellite_Pos()="90" THEN
+        !    XYZ_SHIFT.trans.x:=A;
+        !    XYZ_SHIFT.trans.y:=B*(-1);
+        !ENDIF
+
+        IF Satellite_Pos()="180" THEN
+            XYZ_SHIFT.trans.X:=B*(-1);
+            XYZ_SHIFT.trans.Y:=A*(-1);
+        ENDIF
+
+        IF Satellite_Pos()="270" THEN
+            XYZ_SHIFT.trans.x:=A*(-1);
+            XYZ_SHIFT.trans.y:=B;
+        ENDIF
+
+        !Shift Z
+        XYZ_SHIFT.trans.Z:=Z*(-1);
+
+        !Oframe Shift
+        Wobj_part.oframe:=[[XYZ_SHIFT.trans.x,XYZ_SHIFT.trans.y,XYZ_SHIFT.trans.z],[1,0,0,0]];
+        !
+    ENDPROC
+
+
+
+    !--------------------------------------------------------------------------------------------
+    PROC Write_Wobj_Log()
+
+        VAR string S_serial;
+        VAR string Name_File;
+        S_serial:=GetSysInfo(\SerialNo);
+        !
+        IF Write_Measure_Log_File=TRUE THEN
+            Name_File:="HOME:"+S_serial+"-Measure_Decal.log";
+            !
+            Open Name_File,Measure_Log_File\Append;
+            !
+            Write Measure_Log_File,CDate()+";"+CTime()+";"+ValToStr(S_serial)+";"\NoNewLine;
+            !
+            Write Measure_Log_File,"A (A1="+ValToStr(A1)+"/ A2="+ValToStr(A2)+"); MOY="+ValToStr(A)\NoNewLine;
+            Write Measure_Log_File,";B (B1="+ValToStr(B1)+"/ B2="+ValToStr(B2)+"); MOY="+ValToStr(B)\NoNewLine;
+            Write Measure_Log_File,";C (C1="+ValToStr(C1)+"/ C2="+ValToStr(C2)+"); MOY="+ValToStr(C)\NoNewLine;
+            Write Measure_Log_File,";D (D1="+ValToStr(D1)+"/ D2="+ValToStr(D2)+"); MOY="+ValToStr(D)\NoNewLine;
+            Write Measure_Log_File,";Z (Z1="+ValToStr(Z1)+"/ Z2="+ValToStr(Z2)+"); MOY="+ValToStr(Z);
+            Close Measure_Log_File;
+            !
+            !Delete
+            File_Size_Delete Name_File,1;
+            !
+        ENDIF
+        !
+    ENDPROC
+
+    !--------------------------------------------------------------------------------------------
+    PROC File_Size_Delete(string Name,num Size_Max_Mo)
+        VAR num log_size;
+
+        !Info : 1Mo = 1 000 000 Octets 
+        !Taille Fichier en Mo
+        log_size:=((FileSize(Name))/1000000);
+
+        IF log_size>=Size_Max_Mo THEN
+            !Suppresion du fichier 
+            RemoveFile Name;
+        ENDIF
+        !
+    ENDPROC
+
+
+    !--------------------------------------------------------------------------------------------
+    PROC Reset_Shift(\switch Cycle)
+
+        IF NOT Present(Cycle) THEN
+            !Raz
+            A:=0;
+            B:=0;
+            C:=0;
+            D:=0;
+            Z:=0;
+        ENDIF
+
+        !Reset
+        Wobj_part.oframe:=[[0,0,0],[1,0,0,0]];
+        !
+        XYZ_SHIFT:=[[0,0,0],[1,0,0,0]];
+        !
+        Measurement_Mistake_A:=FALSE;
+        Measurement_Mistake_B:=FALSE;
+        Measurement_Mistake_C:=FALSE;
+        Measurement_Mistake_D:=FALSE;
+        Measurement_Mistake_Z:=FALSE;
+        Abort_cycle:=FALSE;
+        Reset O_Abort_Cycle;
+
+    ENDPROC
+
+    !--------------------------------------------------------------------------------------------
+    PROC Controle_max_error(\switch ToNoview)
+        Reset Def_out_of_tolerance;
+        IF (Measurement_Mistake_A OR Measurement_Mistake_B OR Measurement_Mistake_C OR Measurement_Mistake_D OR Measurement_Mistake_Z) THEN
+            TPWrite "Laser Measure Error: Max error value exceeded";
+            Abort_cycle:=TRUE;
+            Set O_Abort_Cycle;
+            Set Def_out_of_tolerance;
+        ENDIF
+
+    ENDPROC
+
+    !--------------------------------------------------------------------------------------------
+    PROC Acquisition(PERS num Value)
+        WaitTime 1;
+        Value:=AI_Mesure_Ana;
+    ENDPROC
+
+    !--------------------------------------------------------------------------------------------
+    PROC Measure_Ref()
+        !Reset Measure reference si robot en auto
+        IF OpMode()=1 Reference_Measurement:=FALSE;
+
+
+        !Choix Measure reference si robot en manu
+        IF OpMode()<>1 THEN
+            UIMsgBox\Header:="Module Measure","LEARNING PIECE REFERENCE "\Buttons:=btnYesNo\Icon:=iconInfo\Result:=n_Answer;
+            IF n_Answer=resYes Reference_Measurement:=TRUE;
+            IF n_Answer=resNo Reference_Measurement:=FALSE;
+        ENDIF
+
+        IF Reference_Measurement=TRUE THEN
+            UIMsgBox\Header:="Module Measure","ATTENTION ACTIVE LEARNING MODE"\Buttons:=btnOKCancel\Icon:=iconInfo\Result:=n_Answer;
+            IF n_Answer=resCancel Reference_Measurement:=FALSE;
+        ENDIF
+
+    ENDPROC
+ENDMODULE
