@@ -1,0 +1,170 @@
+MODULE MOD_DECALAGEAPI(SYSMODULE,NOSTEPIN)
+    ! ramas testare r.x/y/z
+    ALIAS num AREA;
+
+    !Constante
+    CONST AREA AREA_1:=1;
+    CONST AREA AREA_2:=2;
+    CONST AREA AREA_3:=3;
+    CONST AREA AREA_4:=4;
+    CONST AREA AREA_5:=5;
+    CONST AREA AREA_6:=6;
+    CONST AREA AREA_7:=7;
+    CONST AREA AREA_8:=8;
+    CONST AREA AREA_9:=9;
+
+    !Langage du module (A completer)
+    LOCAL CONST num Langage:=1;
+
+    !Nom des signaux E/S (A completer)
+    LOCAL CONST string Area_Number:="GO_AREA_NUMBER";
+    LOCAL CONST string Values_Area:="GI_AREA_NUMBER";
+    LOCAL CONST string Area_Speed:="GI_AREA_SPEED";
+    LOCAL CONST string Offset_ValueX:="AI_OFFSET_VALUE_X";
+    LOCAL CONST string Offset_ValueY:="AI_OFFSET_VALUE_Y";
+    LOCAL CONST string Offset_ValueZ:="AI_OFFSET_VALUE_Z";
+!    LOCAL CONST string Offset_ValueRx:="AI_OFFSET_VALUE_RX";
+!    LOCAL CONST string Offset_ValueRy:="AI_OFFSET_VALUE_RY";
+!    LOCAL CONST string Offset_ValueRz:="AI_OFFSET_VALUE_RZ";
+    LOCAL CONST string Reltool_ValueX:="AI_RELTOOL_VALUE_X";
+    LOCAL CONST string Reltool_ValueY:="AI_RELTOOL_VALUE_Y";
+    LOCAL CONST string Reltool_ValueZ:="AI_RELTOOL_VALUE_Z";
+!    LOCAL CONST string Reltool_ValueRx:="AI_RELTOOL_VALUE_RX";
+!    LOCAL CONST string Reltool_ValueRy:="AI_RELTOOL_VALUE_RY";
+!    LOCAL CONST string Reltool_ValueRz:="AI_RELTOOL_VALUE_RZ";
+
+    !Message d'interface utilisation multilangue
+    LOCAL CONST string Msg_Warning{2}:=["Ne pas apprendre les positions si les valeurs de décalage ne sont pas nulle","Don't learn positions if the lag values aren't zero"];
+
+    !Déclaration des signaux E/S du module
+    LOCAL VAR signalgo alias_Area_Number;
+    LOCAL VAR signalgi alias_Values_Area;
+    LOCAL VAR signalgi alias_Area_speed;
+    LOCAL VAR signalai alias_Offset_ValueX;
+    LOCAL VAR signalai alias_Offset_ValueY;
+    LOCAL VAR signalai alias_Offset_ValueZ;
+!    LOCAL VAR signalai alias_Offset_ValueRx;
+!    LOCAL VAR signalai alias_Offset_ValueRy;
+!    LOCAL VAR signalai alias_Offset_ValueRz;
+    LOCAL VAR signalai alias_Reltool_ValueX;
+    LOCAL VAR signalai alias_Reltool_ValueY;
+    LOCAL VAR signalai alias_Reltool_ValueZ;
+!    LOCAL VAR signalai alias_Reltool_ValueRx;
+!    LOCAL VAR signalai alias_Reltool_ValueRy;
+!    LOCAL VAR signalai alias_Reltool_ValueRz;
+
+    !Divers
+    LOCAL VAR bool Uimsgnoview;
+
+    !Instruction moveL avec fonction de décalage
+    PROC MoveLR(robtarget Topoint,speeddata speed,zonedata zone,PERS tooldata tool,\PERS wobjdata wobj,num Area)
+        MoveL CORRECTION(Area,Topoint),CORRECTION_SPEED(Area,speed),zone,tool\wobj:=wobj;
+    ENDPROC
+
+    !Instruction moveJ avec fonction de décalage
+    PROC MoveJR(robtarget Topoint,speeddata speed,zonedata zone,PERS tooldata tool,\PERS wobjdata wobj,num Area)
+        MoveJ CORRECTION(Area,Topoint),CORRECTION_SPEED(Area,speed),zone,tool\wobj:=wobj;
+    ENDPROC
+
+    !Instruction moveC avec fonction de décalage
+    PROC MoveCR(robtarget Cirpoint,robtarget Topoint,speeddata speed,zonedata zone,PERS tooldata tool,\PERS wobjdata wobj,num Area)
+        MoveC CORRECTION(Area,Cirpoint),CORRECTION(Area,Topoint),CORRECTION_SPEED(Area,speed),zone,tool\wobj:=wobj;
+    ENDPROC
+
+    LOCAL FUNC speeddata CORRECTION_SPEED(num area,speeddata speed)
+        VAR speeddata Speedvalue;
+
+        !Demande de mise à jour des informations de décalage par offset
+        IF alias_Values_Area<>area THEN
+            SetGO alias_Area_Number,area;
+            WaitGI alias_Values_Area,area;
+        ENDIF
+
+        IF alias_Area_speed<>0 THEN
+            Speedvalue:=speed;
+            Speedvalue.v_tcp:=Speedvalue.v_tcp*alias_Area_speed/100;
+            RETURN Speedvalue;
+        ELSE
+            RETURN speed;
+        ENDIF
+
+    ENDFUNC
+
+
+    !Correction de la position suivant la zone
+    LOCAL FUNC robtarget CORRECTION(num area,robtarget ToPoint)
+        VAR pose Offsetvalues:=[[0,0,0],[1,0,0,0]];
+        VAR pose ReltoolValues:=[[0,0,0],[1,0,0,0]];
+        VAR pose point:=[[0,0,0],[1,0,0,0]];
+        VAR robtarget robpoint;
+
+        !Interface utilisateur avertissement apprentissage des points avec les valeurs à zéro
+        IF OpMode()=OP_MAN_PROG AND Uimsgnoview=FALSE THEN
+            UIMsgBox Msg_Warning{Langage}\Buttons:=btnOK;
+            Uimsgnoview:=TRUE;
+        ENDIF
+
+        !Récupération des config d'axes
+        point.trans:=ToPoint.trans;
+        point.rot:=ToPoint.rot;
+
+        !Demande de mise à jour des informations de décalage par offset
+        IF alias_Values_Area<>area THEN
+            SetGO alias_Area_Number,area;
+            WaitGI alias_Values_Area,area;
+        ENDIF
+
+        !Récupération des valeurs de décalage par offset
+        Offsetvalues.trans.x:=alias_Offset_ValueX/10;
+        Offsetvalues.trans.y:=alias_Offset_ValueY/10;
+        Offsetvalues.trans.z:=alias_Offset_ValueZ/10;
+        !Offsetvalues.rot:=OrientZYX(alias_Offset_ValueRz,alias_Offset_ValueRy,alias_Offset_ValueRx);
+
+        !Decalage du point par offset
+        point:=PoseMult(Offsetvalues,point);
+
+        !Récupération des valeurs de décalage par reltool
+        ReltoolValues.trans.x:=alias_Reltool_ValueX/10;
+        ReltoolValues.trans.y:=alias_Reltool_ValueY/10;
+        ReltoolValues.trans.z:=alias_Reltool_ValueZ/10;
+        !ReltoolValues.rot:=OrientZYX(alias_Reltool_ValueRz,alias_Reltool_ValueRy,alias_Reltool_ValueRx);
+
+        !Decalage du point par reltool
+        point:=PoseMult(point,ReltoolValues);
+
+        !Transfert de la nouvelle position
+        robpoint:=ToPoint;
+        robpoint.trans:=point.trans;
+        robpoint.rot:=point.rot;
+
+        RETURN robpoint;
+
+    ERROR
+
+        !Initialisation des E/S
+        Init_IO;
+
+        RETRY;
+
+    ENDFUNC
+
+    LOCAL PROC Init_IO()
+        !Initialisation des E/S 
+        AliasIO Area_Number,alias_Area_Number;
+        AliasIO Values_Area,alias_Values_Area;
+        AliasIO Area_Speed,alias_Area_speed;
+        AliasIO Offset_ValueX,alias_Offset_ValueX;
+        AliasIO Offset_ValueY,alias_Offset_ValueY;
+        AliasIO Offset_ValueZ,alias_Offset_ValueZ;
+!        AliasIO Offset_ValueRx,alias_Offset_ValueRx;
+!        AliasIO Offset_ValueRy,alias_Offset_ValueRy;
+!        AliasIO Offset_ValueRz,alias_Offset_ValueRz;
+        AliasIO Reltool_ValueX,alias_Reltool_ValueX;
+        AliasIO Reltool_ValueY,alias_Reltool_ValueY;
+        AliasIO Reltool_ValueZ,alias_Reltool_ValueZ;
+!        AliasIO Reltool_ValueRx,alias_Reltool_ValueRx;
+!        AliasIO Reltool_ValueRy,alias_Reltool_ValueRy;
+!        AliasIO Reltool_ValueRz,alias_Reltool_ValueRz;
+
+    ENDPROC
+ENDMODULE
